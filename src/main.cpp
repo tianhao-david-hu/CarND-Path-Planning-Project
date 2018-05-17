@@ -303,13 +303,14 @@ int main() {
             ptsy.push_back(next_wp1[1]);
             ptsy.push_back(next_wp2[1]);
 
-            for(int i =0;i<ptsx.size();i++)
+            for(int i = 0;i<ptsx.size();i++)
             {
               //shift for reference angle to 0 degree
               double shift_x = ptsx[i]-ref_x;
               double shift_y = ptsy[i]-ref_y;
+
               ptsx[i] = shift_x * cos(0-ref_yaw)-shift_y*sin(0-ref_yaw);
-              ptsy[i] = shift_y * sin(0-ref_yaw)+shift_y*cos(0-ref_yaw);
+              ptsy[i] = shift_x * sin(0-ref_yaw)+shift_y*cos(0-ref_yaw);
             }
 
             //create a spline
