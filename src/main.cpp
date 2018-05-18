@@ -252,46 +252,110 @@ int main() {
             {
               car_s = end_path_s;
             }
+            /////////////////////////////////////////////////////////////////////////////////////
+            /////////////////////////////////////////////////////////////////////////////////////
+            //My code starts from here:
+            bool too_close_front=false;
+            bool too_close_at_lane[3]={false,false,false};
+            bool vehicle_near_at_lane[3]={false,false,false};
+            double distance_at_lane[3]={10000,10000,10000};
 
-            bool too_close=false;
+            double collision_threshold_front = 30;
+            double collision_threshold_back=15;
 
             //find ref_v to use
             for(int i =0; i<sensor_fusion.size();i++)
             {
               //car is in my lane
               float d = sensor_fusion[i][6];
-              if(d<(2+lane_width*(lane+0.5)) &&  d>(2+lane_width*(lane-0.5)) )
-              {
-                double vx = sensor_fusion[i][3];
-                double vy = sensor_fusion[i][4];
-                double check_speed = sqrt(vx*vx+vy*vy);
-                double check_car_s = sensor_fusion[i][5];
+              double vx = sensor_fusion[i][3];
+              double vy = sensor_fusion[i][4];
+              double check_speed = sqrt(vx*vx+vy*vy);
+              double check_car_s = sensor_fusion[i][5];
+              check_car_s+=(double)prev_size*0.02*check_speed;
 
-                check_car_s+=(double)prev_size*0.02*check_speed;//if using previous points can project s value out
-                //check s values greater than mine and s gap
-                if(check_car_s>car_s && (check_car_s-car_s) < 30)//gap is smaller than 30 meters
+              //check the traffic condition around the ego vehicle
+              for(int j=0;j<3;j++)
+              {
+                //determine which lane the vehicle is at
+                if(d<(2+lane_width*(j+0.5)) &&  d>(2+lane_width*(j-0.5)) )
                 {
-                  //Do some logic here, lower reference velocity so we dont crash into the car in front of us, could
-                  //also flag to try to change lanes
-                  //ref_vel=29.5;//mph
-                  too_close = true;
-                  if(lane>0)
+                  distance_at_lane[j] = (check_car_s-car_s);
+                  if(check_car_s>car_s)
                   {
-                    lane = 0;
+                    if(distance_at_lane[j]<collision_threshold_front)//gap is smaller than 30 meters
+                    {
+                      too_close_at_lane[j] = true;
+                      if(lane==j)
+                          too_close_front = true;
+                    }
                   }
+                  else
+                    if(abs(distance_at_lane[j])<collision_threshold_back)
+                      vehicle_near_at_lane[j]=true;
                 }
               }
             }
 
-            if(too_close)
+            //Rule for lane changing
+            bool too_close_resolved=false;
+            if(too_close_front)
+            {
+              //Before changing lanes, the ego vehicle will check if the lane is clear under two criteria:
+              //1. if the target lane is clear in front of the vehicle
+              //2. if there is a vehicle behind/beside the ego vehicle on the target lane
+
+              //when the vehicle is in lane 0 or lane 1, it can change to lane 2
+              if( (lane==0||lane==2) && too_close_at_lane[1]==false && vehicle_near_at_lane[1]==false)
+              {
+                lane=1;
+                too_close_resolved=true;
+              }
+              //if the ego vehicle is in lane 1, it can change to either lane 0 or lane 2
+              else if(lane==1 && (too_close_at_lane[0]==false || too_close_at_lane[2]==false))
+              {
+                //if both lane 0 and lane 2 are available, choose the one with larger free space
+                if(too_close_at_lane[0]==false && too_close_at_lane[2]==false)
+                {
+                  if(distance_at_lane[0]>=distance_at_lane[2] && vehicle_near_at_lane[0]==false)
+                  {
+                    lane=0;
+                    too_close_resolved=true;
+                  } 
+                  else if(distance_at_lane[0]<distance_at_lane[2] && vehicle_near_at_lane[2]==false)
+                  {
+                    lane=2;
+                    too_close_resolved=true;
+                  }
+                }
+                //if only lane 0 is available
+                else if(too_close_at_lane[0]==false && vehicle_near_at_lane[0]==false)
+                {
+                  lane=0;
+                  too_close_resolved=true;
+                }
+                //if only lane 2 is available
+                else if(too_close_at_lane[2]==false && vehicle_near_at_lane[2]==false)  
+                {
+                  lane=2;
+                  too_close_resolved=true;
+                }
+                
+              }
+            }
+            //Slow down the vehicle if it too close to the vehicle in the front and can not change lanes
+            if(too_close_front==true && too_close_resolved==false)
             {
               ref_vel-=0.224;
             }
+            //restore the speed if the lane is clear of lane changing
             else if(ref_vel<49.5)
             {
               ref_vel+=0.224;
             }
-
+            /////////////////////////////////////////////////////////////////////
+            /////////////////////////////////////////////////////////////////////
+            //Everything below is same as the code used in the project tutorial
             vector<double> ptsx;
             vector<double> ptsy;
 
@@ -377,7 +441,7 @@ int main() {
             }
 
             //Calculate how to break up spline points so that we travel at our desired reference velocity
-            double target_x = 30.0;
+            double target_x = collision_threshold_front;
             double target_y = s(target_x);
             double target_dist = sqrt(target_x*target_x + target_y*target_y);
 
