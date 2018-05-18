@@ -255,13 +255,14 @@ int main() {
             /////////////////////////////////////////////////////////////////////////////////////
             /////////////////////////////////////////////////////////////////////////////////////
             //My code starts from here:
-            bool too_close_front=false;
+            bool need_lane_change=false;
             bool too_close_at_lane[3]={false,false,false};
             bool vehicle_near_at_lane[3]={false,false,false};
             double distance_at_lane[3]={10000,10000,10000};
 
             double collision_threshold_front = 30;
-            double collision_threshold_back=15;
+            double minimum_lane_change_space = 15;
+            double collision_threshold_back=20;
 
             //find ref_v to use
             for(int i =0; i<sensor_fusion.size();i++)
@@ -286,8 +287,9 @@ int main() {
                     if(distance_at_lane[j]<collision_threshold_front)//gap is smaller than 30 meters
                     {
                       too_close_at_lane[j] = true;
-                      if(lane==j)
-                          too_close_front = true;
+                      //Make sure there are enough distance in the front for the lane change
+                      if(lane==j && distance_at_lane[j]>minimum_lane_change_space)
+                          need_lane_change = true;
                     }
                   }
                   else
@@ -299,7 +301,7 @@ int main() {
 
             //Rule for lane changing
             bool too_close_resolved=false;
-            if(too_close_front)
+            if(need_lane_change)
             {
               //Before changing lanes, the ego vehicle will check if the lane is clear under two criteria:
               //1. if the target lane is clear in front of the vehicle
@@ -344,7 +346,7 @@ int main() {
               }
             }
             //Slow down the vehicle if it too close to the vehicle in the front and can not change lanes
-            if(too_close_front==true && too_close_resolved==false)
+            if(need_lane_change==true && too_close_resolved==false)
             {
               ref_vel-=0.224;
             }
